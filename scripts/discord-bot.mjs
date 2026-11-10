@@ -2,7 +2,10 @@ import { createServer } from "node:http"
 import { Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js"
 
 const token = process.env.DISCORD_BOT_TOKEN
-const guildId = process.env.DISCORD_GUILD_ID
+  ?.trim()
+  .replace(/^Bot\s+/i, "")
+  .replace(/^['"]|['"]$/g, "")
+const guildId = process.env.DISCORD_GUILD_ID?.trim()
 
 if (!token) throw new Error("Missing DISCORD_BOT_TOKEN")
 
