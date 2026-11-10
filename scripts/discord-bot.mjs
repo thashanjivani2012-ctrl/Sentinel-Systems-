@@ -7,8 +7,10 @@ const guildId = process.env.DISCORD_GUILD_ID
 if (!token) throw new Error("Missing DISCORD_BOT_TOKEN")
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
+let discordReady = false
 
 client.once(Events.ClientReady, async (readyClient) => {
+  discordReady = true
   console.log(`[discord] Logged in as ${readyClient.user.tag}`)
   if (!guildId) return
 
@@ -41,13 +43,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 })
 
+client.on(Events.ShardDisconnect, () => {
+  discordReady = false
+  console.warn("[discord] Gateway disconnected; waiting for automatic reconnect.")
+})
+
+client.on(Events.Error, (error) => {
+  console.error("[discord] Gateway error:", error)
+})
+
 process.once("SIGINT", () => client.destroy())
 process.once("SIGTERM", () => client.destroy())
 
 const healthPort = Number(process.env.DISCORD_HEALTH_PORT ?? 8787)
-createServer((_, response) => {
-  response.writeHead(200, { "content-type": "text/plain" })
-  response.end("discord bot online")
+createServer((request, response) => {
+  const isHealthCheck = request.url === "/health" || request.url === "/"
+  if (!isHealthCheck) {
+    response.writeHead(404)
+    response.end("not found")
+    return
+  }
+
+  response.writeHead(discordReady ? 200 : 503, { "content-type": "application/json" })
+  response.end(JSON.stringify({ status: discordReady ? "online" : "starting", service: "discord-bot" }))
 }).listen(healthPort, "0.0.0.0")
 
 await client.login(token)
