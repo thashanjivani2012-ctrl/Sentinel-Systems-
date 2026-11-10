@@ -15,20 +15,21 @@ let discordReady = false
 client.once(Events.ClientReady, async (readyClient) => {
   discordReady = true
   console.log(`[discord] Logged in as ${readyClient.user.tag}`)
-  if (!guildId) return
-
   try {
     const applicationId = process.env.DISCORD_APPLICATION_ID
     if (!applicationId) throw new Error("Missing DISCORD_APPLICATION_ID")
 
     const rest = new REST({ version: "10" }).setToken(token)
-    await rest.put(Routes.applicationGuildCommands(applicationId, guildId), {
+    const route = guildId
+      ? Routes.applicationGuildCommands(applicationId, guildId)
+      : Routes.applicationCommands(applicationId)
+    await rest.put(route, {
       body: [
         new SlashCommandBuilder().setName("ping").setDescription("Check whether Sentinel is online").toJSON(),
         new SlashCommandBuilder().setName("help").setDescription("Show available commands").toJSON(),
       ],
     })
-    console.log(`[discord] Registered commands in guild ${guildId}`)
+    console.log(`[discord] Registered commands ${guildId ? `in guild ${guildId}` : "globally"}`)
   } catch (error) {
     console.error("[discord] Command registration failed; keeping the bot online.", error)
   }
