@@ -6,12 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "bot": "node scripts/discord-bot.mjs",
     "lint": "next lint"
   },
   "dependencies": {
     "@chat-adapter/discord": "latest",
     "@chat-adapter/state-memory": "^4.44.0",
     "chat": "latest",
+    "discord.js": "^14.28.1",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
