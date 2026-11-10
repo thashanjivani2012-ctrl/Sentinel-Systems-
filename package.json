@@ -1,0 +1,28 @@
+{
+  "name": "discord-bot-template",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@chat-adapter/discord": "latest",
+    "@chat-adapter/state-memory": "^4.44.0",
+    "chat": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zlib-sync": "^0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "typescript": "latest"
+  }
+}
