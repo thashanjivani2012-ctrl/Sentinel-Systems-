@@ -1,5 +1,5 @@
 import { createServer } from "node:http"
-import { Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js"
+import { Client, EmbedBuilder, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js"
 
 const token = process.env.DISCORD_BOT_TOKEN
   ?.trim()
@@ -8,6 +8,12 @@ const token = process.env.DISCORD_BOT_TOKEN
 const guildId = process.env.DISCORD_GUILD_ID?.trim()
 
 if (!token) throw new Error("Missing DISCORD_BOT_TOKEN")
+
+// Single source of truth: /help and command registration both read this list.
+const commands = [
+  { name: "ping", description: "Check whether Sentinel is online" },
+  { name: "help", description: "Show available commands" },
+]
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
 let discordReady = false
@@ -24,10 +30,7 @@ client.once(Events.ClientReady, async (readyClient) => {
       ? Routes.applicationGuildCommands(applicationId, guildId)
       : Routes.applicationCommands(applicationId)
     await rest.put(route, {
-      body: [
-        new SlashCommandBuilder().setName("ping").setDescription("Check whether Sentinel is online").toJSON(),
-        new SlashCommandBuilder().setName("help").setDescription("Show available commands").toJSON(),
-      ],
+      body: commands.map((c) => new SlashCommandBuilder().setName(c.name).setDescription(c.description).toJSON()),
     })
     console.log(`[discord] Registered commands ${guildId ? `in guild ${guildId}` : "globally"}`)
   } catch (error) {
@@ -39,11 +42,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return
 
   if (interaction.commandName === "ping") {
-    await interaction.reply("Pong. Sentinel is online and ready.")
+    const embed = new EmbedBuilder()
+      .setColor(0x57f287)
+      .setTitle("Pong!")
+      .setDescription("Sentinel is online and ready.")
+      .addFields(
+        { name: "Gateway latency", value: `${Math.round(client.ws.ping)} ms`, inline: true },
+        { name: "Response time", value: `${Date.now() - interaction.createdTimestamp} ms`, inline: true },
+      )
+      .setTimestamp()
+    await interaction.reply({ embeds: [embed] })
   }
 
   if (interaction.commandName === "help") {
-    await interaction.reply("Available commands: `/ping` — check status · `/help` — show this message")
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("Sentinel commands")
+      .setDescription(commands.map((c) => `\`/${c.name}\` — ${c.description}`).join("\n"))
+    await interaction.reply({ embeds: [embed], ephemeral: true })
   }
 })
 
