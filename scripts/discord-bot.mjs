@@ -1,5 +1,20 @@
 import { createServer } from "node:http"
-import { Client, EmbedBuilder, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js"
+import {
+  Client,
+  ContainerBuilder,
+  EmbedBuilder,
+  Events,
+  GatewayIntentBits,
+  MessageFlags,
+  REST,
+  Routes,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  SlashCommandBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from "discord.js"
 
 const token = process.env.DISCORD_BOT_TOKEN
   ?.trim()
@@ -12,11 +27,86 @@ if (!token) throw new Error("Missing DISCORD_BOT_TOKEN")
 // Single source of truth: /help and command registration both read this list.
 const commands = [
   { name: "ping", description: "Check whether Sentinel is online" },
+  { name: "status", description: "Show detailed system status" },
   { name: "help", description: "Show available commands" },
 ]
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
 let discordReady = false
+
+function formatDuration(ms) {
+  const total = Math.floor(ms / 1000)
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  return [days ? `${days}d` : "", hours ? `${hours}h` : "", minutes ? `${minutes}m` : "", seconds ? `${seconds}s` : ""]
+    .filter(Boolean)
+    .join(" ") || "0s"
+}
+
+// Status system: a single source of truth for the live status snapshot.
+function getStatusSnapshot() {
+  const uptime = client.readyAt ? Date.now() - client.readyAt.getTime() : 0
+  const heapUsed = process.memoryUsage().heapUsed / 1024 / 1024
+  return {
+    online: discordReady,
+    uptime,
+    gatewayLatency: Math.round(client.ws.ping),
+    guilds: client.guilds.cache.size,
+    memory: `${heapUsed.toFixed(1)} MB`,
+    node: process.version,
+  }
+}
+
+function buildStatusContainer(responseTime) {
+  const status = getStatusSnapshot()
+  const color = status.online ? 0x57f287 : 0xfee75c
+  const heading = status.online ? "Online — gateway connected and responding" : "Connecting — gateway is reconnecting"
+
+  const container = new ContainerBuilder().setAccentColor(color)
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`## Sentinel Systems\n**● ${status.online ? "Online" : "Connecting"}** — ${heading}`),
+  )
+
+  container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
+
+  container.addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          [
+            `**Uptime** — ${formatDuration(status.uptime)}`,
+            `**Gateway latency** — ${status.gatewayLatency} ms`,
+            `**Response time** — ${responseTime} ms`,
+          ].join("\n"),
+        ),
+      )
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(client.user.displayAvatarURL())),
+  )
+
+  container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      [
+        `**Guilds** — ${status.guilds}`,
+        `**Commands** — ${commands.length}`,
+        `**Memory** — ${status.memory}`,
+        `**Node.js** — ${status.node}`,
+      ].join("\n"),
+    ),
+  )
+
+  container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`-# ${client.user.tag} · ${status.online ? "all systems operational" : "reconnecting"}`),
+  )
+
+  return container
+}
 
 client.once(Events.ClientReady, async (readyClient) => {
   discordReady = true
@@ -57,6 +147,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       )
       .setTimestamp()
     await interaction.reply({ embeds: [embed] })
+  }
+
+  if (interaction.commandName === "status") {
+    await interaction.reply({
+      flags: MessageFlags.IsComponentsV2,
+      components: [buildStatusContainer(Date.now() - interaction.createdTimestamp)],
+    })
   }
 
   if (interaction.commandName === "help") {
