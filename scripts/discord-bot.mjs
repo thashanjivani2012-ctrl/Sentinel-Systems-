@@ -26,13 +26,18 @@ client.once(Events.ClientReady, async (readyClient) => {
     if (!applicationId) throw new Error("Missing DISCORD_APPLICATION_ID")
 
     const rest = new REST({ version: "10" }).setToken(token)
-    const route = guildId
-      ? Routes.applicationGuildCommands(applicationId, guildId)
-      : Routes.applicationCommands(applicationId)
-    await rest.put(route, {
-      body: commands.map((c) => new SlashCommandBuilder().setName(c.name).setDescription(c.description).toJSON()),
-    })
-    console.log(`[discord] Registered commands ${guildId ? `in guild ${guildId}` : "globally"}`)
+    const body = commands.map((c) => new SlashCommandBuilder().setName(c.name).setDescription(c.description).toJSON())
+    const globalRoute = Routes.applicationCommands(applicationId)
+
+    if (guildId) {
+      await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body })
+      // Wipe stale global registrations so commands don't appear twice.
+      await rest.put(globalRoute, { body: [] })
+      console.log(`[discord] Registered commands in guild ${guildId}; cleared global commands`)
+    } else {
+      await rest.put(globalRoute, { body })
+      console.log("[discord] Registered commands globally")
+    }
   } catch (error) {
     console.error("[discord] Command registration failed; keeping the bot online.", error)
   }
