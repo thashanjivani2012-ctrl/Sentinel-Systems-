@@ -4,7 +4,7 @@ from discord.ext import commands
 
 from bot import content, helpers
 from bot.cards import status_card
-from bot.embeds import build_embed, content_embed, field
+from bot.embeds import DIVIDER, build_embed, content_embed, field
 
 
 class General(commands.Cog):
@@ -22,10 +22,10 @@ class General(commands.Cog):
             embed=build_embed(
                 color="success",
                 title="Pong!",
-                description="Sentinel is online and ready.",
+                description=f"{DIVIDER}\nSentinel is online and ready.\n{DIVIDER}",
                 fields=[
-                    field("Gateway latency", helpers.format_latency(status["gateway_latency"])),
-                    field("Response time", f"{helpers.response_time_ms(interaction)} ms"),
+                    field("**Gateway Latency**", f"> {helpers.format_latency(status['gateway_latency'])}", False),
+                    field("**Response Time**", f"> {helpers.response_time_ms(interaction)} ms", False),
                 ],
             )
         )
@@ -45,8 +45,8 @@ class General(commands.Cog):
         await interaction.response.send_message(
             embed=build_embed(
                 color="info",
-                title="Sentinel commands",
-                description="\n".join(lines) or "No commands available.",
+                title="Sentinel Commands",
+                description=f"{DIVIDER}\n" + ("\n".join(lines) or "No commands available.") + f"\n{DIVIDER}",
             ),
             ephemeral=True,
         )
@@ -81,7 +81,7 @@ class General(commands.Cog):
         await interaction.response.send_message(
             embed=build_embed(
                 title="Uptime",
-                description=f"Sentinel has been online for **{duration}**.",
+                description=f"{DIVIDER}\nSentinel has been online for **{duration}**.\n{DIVIDER}",
             )
         )
 
@@ -93,10 +93,11 @@ class General(commands.Cog):
             embed=build_embed(
                 title=guild.name,
                 thumbnail_url=guild.icon.url if guild.icon else None,
+                description=f"{DIVIDER}\nServer information and statistics\n{DIVIDER}",
                 fields=[
-                    field("Members", str(guild.member_count)),
-                    field("Created", f"<t:{int(guild.created_at.timestamp())}:D>"),
-                    field("Owner", f"<@{guild.owner_id}>"),
+                    field("**Members**", f"> {guild.member_count}", False),
+                    field("**Created**", f"> <t:{int(guild.created_at.timestamp())}:D>", False),
+                    field("**Owner**", f"> <@{guild.owner_id}>", False),
                 ],
             )
         )

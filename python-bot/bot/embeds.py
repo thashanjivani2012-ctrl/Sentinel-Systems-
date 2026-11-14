@@ -12,7 +12,10 @@ COLORS = {
     "danger": 0xED4245,
     "info": 0x5865F2,
     "neutral": 0x2B2D31,
+    "brand": 3073750,  # Sentinel green
 }
+
+DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 LIMITS = {
     "title": 256,
@@ -26,12 +29,15 @@ LIMITS = {
 
 @dataclass
 class Theme:
-    color: str = "primary"
+    color: str = "brand"
     author: str | None = None
+    author_icon_url: str | None = None
     footer: str | None = "Sentinel Systems"
     footer_icon_url: str | None = None
     thumbnail_url: str | None = None
     image_url: str | None = None
+    logo_url: str | None = None  # alias for thumbnail_url (logo at top)
+    banner_url: str | None = None  # alias for image_url (banner at bottom)
     timestamp: bool = True
 
 
@@ -116,22 +122,25 @@ def build_embed(
     author_spec = author if author is not None else theme.author
     if author_spec:
         if isinstance(author_spec, str):
-            embed.set_author(name=_clip(author_spec, LIMITS["author_name"]))
+            embed.set_author(
+                name=_clip(author_spec, LIMITS["author_name"]),
+                icon_url=theme.author_icon_url,
+            )
         else:
             embed.set_author(
                 name=_clip(author_spec.get("name"), LIMITS["author_name"]),
-                icon_url=author_spec.get("icon_url"),
+                icon_url=author_spec.get("icon_url") or theme.author_icon_url,
                 url=author_spec.get("url"),
             )
 
     for name, value, inline in _normalise_fields(fields):
         embed.add_field(name=name, value=value, inline=inline)
 
-    thumbnail = thumbnail_url or theme.thumbnail_url
+    thumbnail = thumbnail_url or theme.logo_url or theme.thumbnail_url
     if thumbnail:
         embed.set_thumbnail(url=thumbnail)
 
-    image = image_url or theme.image_url
+    image = image_url or theme.banner_url or theme.image_url
     if image:
         embed.set_image(url=image)
 

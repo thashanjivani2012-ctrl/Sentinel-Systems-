@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot import helpers
-from bot.embeds import build_embed, field
+from bot.embeds import DIVIDER, build_embed, field
 
 
 class Users(commands.Cog):
@@ -17,18 +17,19 @@ class Users(commands.Cog):
     ):
         target = user or interaction.user
         fields = [
-            field("ID", str(target.id)),
-            field("Account created", f"<t:{int(target.created_at.timestamp())}:D>"),
+            field("**ID**", f"> {target.id}", False),
+            field("**Account Created**", f"> <t:{int(target.created_at.timestamp())}:D>", False),
         ]
         member = interaction.guild.get_member(target.id) if interaction.guild else None
         if member is not None and member.joined_at is not None:
-            fields.append(field("Joined", f"<t:{int(member.joined_at.timestamp())}:D>"))
-        fields.append(field("Bot", "Yes" if target.bot else "No"))
+            fields.append(field("**Joined**", f"> <t:{int(member.joined_at.timestamp())}:D>", False))
+        fields.append(field("**Bot**", "> Yes" if target.bot else "> No", False))
 
         await interaction.response.send_message(
             embed=build_embed(
                 title=helpers.user_label(target),
                 thumbnail_url=target.display_avatar.url,
+                description=f"{DIVIDER}\nUser information\n{DIVIDER}",
                 fields=fields,
             )
         )

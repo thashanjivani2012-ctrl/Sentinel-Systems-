@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from bot.embeds import build_embed, field
+from bot.embeds import DIVIDER, build_embed, field
 
 EIGHT_BALL = (
     "It is certain.",
@@ -34,8 +34,8 @@ class Fun(commands.Cog):
         result = random.randint(1, sides)
         await interaction.response.send_message(
             embed=build_embed(
-                title="Dice roll",
-                description=f"You rolled a **{result}** (d{sides})",
+                title="Dice Roll",
+                description=f"{DIVIDER}\nYou rolled a **{result}** (d{sides})\n{DIVIDER}",
             )
         )
 
@@ -43,7 +43,10 @@ class Fun(commands.Cog):
     async def coinflip(self, interaction: discord.Interaction):
         result = random.choice(("Heads", "Tails"))
         await interaction.response.send_message(
-            embed=build_embed(title="Coin flip", description=f"**{result}**")
+            embed=build_embed(
+                title="Coin Flip",
+                description=f"{DIVIDER}\n**{result}**\n{DIVIDER}",
+            )
         )
 
     @app_commands.command(name="8ball", description="Ask the magic 8-ball")
@@ -55,10 +58,11 @@ class Fun(commands.Cog):
     ):
         await interaction.response.send_message(
             embed=build_embed(
-                title="Magic 8-ball",
+                title="Magic 8-Ball",
+                description=DIVIDER,
                 fields=[
-                    field("Question", question, False),
-                    field("Answer", random.choice(EIGHT_BALL), False),
+                    field("**Question**", f"> {question}", False),
+                    field("**Answer**", f"> {random.choice(EIGHT_BALL)}", False),
                 ],
             )
         )
