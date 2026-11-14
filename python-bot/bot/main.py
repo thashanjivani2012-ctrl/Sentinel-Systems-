@@ -22,6 +22,7 @@ class Bot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents,
                          application_id=config.APPLICATION_ID)
         self.launched_at = time.monotonic()
+        self._synced = False
         self._cleared_guild_commands = False
         self._health_runner = None
         self.portal = PortalEvents(config.PORTAL_EVENTS_URL, config.BOT_EVENTS_SECRET)
@@ -29,17 +30,30 @@ class Bot(commands.Bot):
     async def setup_hook(self):
         for f in sorted(pathlib.Path(__file__).parent.joinpath("cogs").glob("[!_]*.py")):
             await self.load_extension(f"bot.cogs.{f.stem}")
-        if config.GUILD_ID:
-            guild = discord.Object(id=config.GUILD_ID)
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-            self.tree.clear_commands(guild=None)
-            await self.tree.sync()
-        else:
-            await self.tree.sync()
         self.tree.on_error = self.on_tree_error
         await self.start_health_server()
         await self.portal.start()
+        # A failed sync must not take the gateway down; retry it on ready.
+        await self.sync_commands()
+
+    async def sync_commands(self) -> bool:
+        try:
+            if config.GUILD_ID:
+                guild = discord.Object(id=config.GUILD_ID)
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+                # Only drop the globals once the guild copy exists.
+                self.tree.clear_commands(guild=None)
+                await self.tree.sync()
+            else:
+                synced = await self.tree.sync()
+        except (discord.HTTPException, discord.Forbidden) as error:
+            logging.error("Slash command sync failed: %s", error)
+            self._synced = False
+            return False
+        self._synced = True
+        logging.info("Synced %d slash commands", len(synced))
+        return True
 
     async def start_health_server(self):
         app = web.Application()
@@ -92,6 +106,8 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         logging.info("Logged in as %s (%s)", self.user, self.user.id)
+        if not self._synced:
+            await self.sync_commands()
         if config.GUILD_ID or self._cleared_guild_commands:
             return
         # Guild copies left behind by an earlier GUILD_ID run would show twice.
