@@ -2,6 +2,7 @@ import { CopyButton } from "@/components/copy-button"
 
 const commands = [
   { command: "/ping", description: "Check bot health and latency." },
+  { command: "/status", description: "Detailed status with uptime, latency, and memory." },
   { command: "help", description: "List commands inside a subscribed thread." },
 ]
 

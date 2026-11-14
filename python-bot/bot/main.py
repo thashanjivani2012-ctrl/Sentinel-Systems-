@@ -21,6 +21,8 @@ class Bot(commands.Bot):
             await self.load_extension(f"bot.cogs.{f.stem}")
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
         else:
