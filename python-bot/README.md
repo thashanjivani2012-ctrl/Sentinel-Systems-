@@ -42,3 +42,35 @@ Node app and the bot no longer share a runtime. The bot serves `/health`
 Set `DISCORD_BOT_TOKEN` and `DISCORD_APPLICATION_ID` in the Railway service.
 `DISCORD_GUILD_ID` is optional and registers commands to that server instantly.
 
+Enable **Server Members Intent** in the Discord Developer Portal; the bot
+needs it for join, leave and role-change events. If you deploy before the
+toggle is on, set `DISCORD_MEMBERS_INTENT=false` to start without them.
+
+## Portal events
+
+The bot posts signed events to `PORTAL_EVENTS_URL` (default
+`https://sentinelsys.xyz/api/public/discord/events`).
+
+| Variable | Purpose |
+| :--- | :--- |
+| `PORTAL_EVENTS_URL` | Delivery endpoint |
+| `BOT_EVENTS_SECRET` | Shared HMAC secret; delivery is disabled without it |
+| `PRIMARY_GUILD_ID` | Guild whose events are sent (defaults to `GUILD_ID`) |
+
+Each request sends `Content-Type: application/json`,
+`X-FSRP-Timestamp` (UTC epoch seconds) and `X-FSRP-Signature`
+(`HMAC-SHA256(secret, "<timestamp>.<raw body>")`, lowercase hex).
+
+Events emitted:
+
+- `member_joined` — user, account age, join time, member count
+- `member_left` — user, join time, leave time
+- `member_roles_updated` — added/removed/current roles
+- `dm_received` — message content and attachment metadata
+- `ticket_closed` — when a `ticket-*` channel is deleted
+
+Delivery is queued in the background. `400`/`401` responses are logged and
+dropped; `429`, `5xx` and network errors retry with exponential backoff, up
+to 5 attempts, reusing the same `event_id`. Payloads over 64 KB are dropped
+with a warning. DMs are truncated at 4000 characters and 10 attachments.
+

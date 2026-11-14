@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot import config
+from bot.portal import PortalEvents
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,12 +16,15 @@ logging.basicConfig(level=logging.INFO)
 class Bot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
+        # Required for member join/leave/role events; enable it in the Developer Portal.
+        intents.members = config.MEMBERS_INTENT
         # intents.message_content = True  # also enable in the Developer Portal
         super().__init__(command_prefix="!", intents=intents,
                          application_id=config.APPLICATION_ID)
         self.launched_at = time.monotonic()
         self._cleared_guild_commands = False
         self._health_runner = None
+        self.portal = PortalEvents(config.PORTAL_EVENTS_URL, config.BOT_EVENTS_SECRET)
 
     async def setup_hook(self):
         for f in sorted(pathlib.Path(__file__).parent.joinpath("cogs").glob("[!_]*.py")):
@@ -35,6 +39,7 @@ class Bot(commands.Bot):
             await self.tree.sync()
         self.tree.on_error = self.on_tree_error
         await self.start_health_server()
+        await self.portal.start()
 
     async def start_health_server(self):
         app = web.Application()
@@ -63,6 +68,7 @@ class Bot(commands.Bot):
         )
 
     async def close(self):
+        await self.portal.close()
         if self._health_runner is not None:
             await self._health_runner.cleanup()
             self._health_runner = None
