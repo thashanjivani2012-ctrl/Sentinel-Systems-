@@ -3,6 +3,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN", "")
-APPLICATION_ID = int(os.getenv("APPLICATION_ID") or 0) or None
-GUILD_ID = int(os.getenv("GUILD_ID") or 0) or None
+
+def _int_env(name: str) -> int | None:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        raise SystemExit(f"{name} must be a numeric ID, got {value!r}") from None
+
+
+TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
+APPLICATION_ID = _int_env("APPLICATION_ID")
+GUILD_ID = _int_env("GUILD_ID")

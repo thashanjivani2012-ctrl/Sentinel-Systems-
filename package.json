@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "bot": "node scripts/discord-bot.mjs",
-    "lint": "next lint"
+    "bot": "node --env-file-if-exists=.env scripts/discord-bot.mjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@chat-adapter/discord": "latest",

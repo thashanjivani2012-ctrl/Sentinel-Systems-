@@ -45,6 +45,11 @@ function formatDuration(ms) {
     .join(" ") || "0s"
 }
 
+// ws.ping stays at -1 until the first heartbeat round-trip completes.
+function formatLatency(ms) {
+  return ms >= 0 ? `${Math.round(ms)} ms` : "measuring"
+}
+
 // Status system: a single source of truth for the live status snapshot.
 function getStatusSnapshot() {
   const uptime = client.readyAt ? Date.now() - client.readyAt.getTime() : 0
@@ -52,7 +57,7 @@ function getStatusSnapshot() {
   return {
     online: discordReady,
     uptime,
-    gatewayLatency: Math.round(client.ws.ping),
+    gatewayLatency: client.ws.ping,
     guilds: client.guilds.cache.size,
     memory: `${heapUsed.toFixed(1)} MB`,
     node: process.version,
@@ -78,7 +83,7 @@ function buildStatusContainer(responseTime) {
         new TextDisplayBuilder().setContent(
           [
             `**Uptime** — ${formatDuration(status.uptime)}`,
-            `**Gateway latency** — ${status.gatewayLatency} ms`,
+            `**Gateway latency** — ${formatLatency(status.gatewayLatency)}`,
             `**Response time** — ${responseTime} ms`,
           ].join("\n"),
         ),
@@ -136,32 +141,45 @@ client.once(Events.ClientReady, async (readyClient) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return
 
-  if (interaction.commandName === "ping") {
-    const embed = new EmbedBuilder()
-      .setColor(0x57f287)
-      .setTitle("Pong!")
-      .setDescription("Sentinel is online and ready.")
-      .addFields(
-        { name: "Gateway latency", value: `${Math.round(client.ws.ping)} ms`, inline: true },
-        { name: "Response time", value: `${Date.now() - interaction.createdTimestamp} ms`, inline: true },
-      )
-      .setTimestamp()
-    await interaction.reply({ embeds: [embed] })
-  }
+  try {
+    if (interaction.commandName === "ping") {
+      const embed = new EmbedBuilder()
+        .setColor(0x57f287)
+        .setTitle("Pong!")
+        .setDescription("Sentinel is online and ready.")
+        .addFields(
+          { name: "Gateway latency", value: formatLatency(client.ws.ping), inline: true },
+          { name: "Response time", value: `${Date.now() - interaction.createdTimestamp} ms`, inline: true },
+        )
+        .setTimestamp()
+      await interaction.reply({ embeds: [embed] })
+      return
+    }
 
-  if (interaction.commandName === "status") {
-    await interaction.reply({
-      flags: MessageFlags.IsComponentsV2,
-      components: [buildStatusContainer(Date.now() - interaction.createdTimestamp)],
-    })
-  }
+    if (interaction.commandName === "status") {
+      await interaction.reply({
+        flags: MessageFlags.IsComponentsV2,
+        components: [buildStatusContainer(Date.now() - interaction.createdTimestamp)],
+      })
+      return
+    }
 
-  if (interaction.commandName === "help") {
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("Sentinel commands")
-      .setDescription(commands.map((c) => `\`/${c.name}\` — ${c.description}`).join("\n"))
-    await interaction.reply({ embeds: [embed], ephemeral: true })
+    if (interaction.commandName === "help") {
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("Sentinel commands")
+        .setDescription(commands.map((c) => `\`/${c.name}\` — ${c.description}`).join("\n"))
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral })
+      return
+    }
+  } catch (error) {
+    console.error(`[discord] /${interaction.commandName} failed:`, error)
+
+    const payload = { content: "That command failed. Try again in a moment.", flags: MessageFlags.Ephemeral }
+    const respond = interaction.deferred || interaction.replied
+      ? () => interaction.followUp(payload)
+      : () => interaction.reply(payload)
+    await respond().catch(() => {})
   }
 })
 
@@ -170,15 +188,17 @@ client.on(Events.ShardDisconnect, () => {
   console.warn("[discord] Gateway disconnected; waiting for automatic reconnect.")
 })
 
+client.on(Events.ShardResume, () => {
+  discordReady = true
+  console.log("[discord] Gateway resumed.")
+})
+
 client.on(Events.Error, (error) => {
   console.error("[discord] Gateway error:", error)
 })
 
-process.once("SIGINT", () => client.destroy())
-process.once("SIGTERM", () => client.destroy())
-
-const healthPort = Number(process.env.DISCORD_HEALTH_PORT ?? 8787)
-createServer((request, response) => {
+const healthPort = Number(process.env.PORT || process.env.DISCORD_HEALTH_PORT || 8787)
+const healthServer = createServer((request, response) => {
   const isHealthCheck = request.url === "/health" || request.url === "/"
   if (!isHealthCheck) {
     response.writeHead(404)
@@ -188,6 +208,22 @@ createServer((request, response) => {
 
   response.writeHead(discordReady ? 200 : 503, { "content-type": "application/json" })
   response.end(JSON.stringify({ status: discordReady ? "online" : "starting", service: "discord-bot" }))
-}).listen(healthPort, "0.0.0.0")
+})
+
+// Keep the bot online even if the port is taken; the health check is secondary.
+healthServer.on("error", (error) => {
+  console.error(`[discord] Health server unavailable on port ${healthPort}:`, error)
+})
+
+healthServer.listen(healthPort, "0.0.0.0")
+
+async function shutdown() {
+  healthServer.close()
+  client.destroy()
+  process.exit(0)
+}
+
+process.once("SIGINT", shutdown)
+process.once("SIGTERM", shutdown)
 
 await client.login(token)
