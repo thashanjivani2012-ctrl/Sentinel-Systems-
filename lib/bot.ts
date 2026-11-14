@@ -2,10 +2,18 @@ import { Chat } from "chat"
 import { createDiscordAdapter } from "@chat-adapter/discord"
 import { createMemoryState } from "@chat-adapter/state-memory"
 
+// Placeholders keep the module importable at build time, but must stay well-formed:
+// the adapter validates the public key as 64 hex characters.
+const placeholderPublicKey = "0".repeat(64)
+
 export const bot = new Chat({
   userName: process.env.DISCORD_BOT_USERNAME ?? "sentinel",
   adapters: {
-    discord: createDiscordAdapter({ botToken: process.env.DISCORD_BOT_TOKEN ?? "preview-placeholder", publicKey: process.env.DISCORD_PUBLIC_KEY ?? "preview-placeholder", applicationId: process.env.DISCORD_APPLICATION_ID ?? "preview-placeholder" }),
+    discord: createDiscordAdapter({
+      botToken: process.env.DISCORD_BOT_TOKEN ?? "preview-placeholder",
+      publicKey: process.env.DISCORD_PUBLIC_KEY ?? placeholderPublicKey,
+      applicationId: process.env.DISCORD_APPLICATION_ID ?? "preview-placeholder",
+    }),
   },
   state: createMemoryState(),
 })
