@@ -3,6 +3,7 @@ import pathlib
 import time
 
 import discord
+from aiohttp import web
 from discord import app_commands
 from discord.ext import commands
 
@@ -19,6 +20,7 @@ class Bot(commands.Bot):
                          application_id=config.APPLICATION_ID)
         self.launched_at = time.monotonic()
         self._cleared_guild_commands = False
+        self._health_runner = None
 
     async def setup_hook(self):
         for f in sorted(pathlib.Path(__file__).parent.joinpath("cogs").glob("[!_]*.py")):
@@ -32,6 +34,39 @@ class Bot(commands.Bot):
         else:
             await self.tree.sync()
         self.tree.on_error = self.on_tree_error
+        await self.start_health_server()
+
+    async def start_health_server(self):
+        app = web.Application()
+        app.router.add_get("/health", self.health)
+        app.router.add_get("/", self.health)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", config.HEALTH_PORT)
+        try:
+            await site.start()
+        except OSError as error:
+            # Keep the bot online even if the port is taken.
+            logging.warning(
+                "Health server unavailable on port %s: %s", config.HEALTH_PORT, error
+            )
+            await runner.cleanup()
+            return
+        self._health_runner = runner
+        logging.info("Health server listening on %s", config.HEALTH_PORT)
+
+    async def health(self, request: web.Request) -> web.Response:
+        online = self.is_ready()
+        return web.json_response(
+            {"status": "online" if online else "starting", "service": "discord-bot"},
+            status=200 if online else 503,
+        )
+
+    async def close(self):
+        if self._health_runner is not None:
+            await self._health_runner.cleanup()
+            self._health_runner = None
+        await super().close()
 
     async def on_tree_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError

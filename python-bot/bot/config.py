@@ -26,3 +26,4 @@ def _int_env(*names: str) -> int | None:
 TOKEN = _env("DISCORD_TOKEN", "DISCORD_BOT_TOKEN")
 APPLICATION_ID = _int_env("APPLICATION_ID", "DISCORD_APPLICATION_ID")
 GUILD_ID = _int_env("GUILD_ID", "DISCORD_GUILD_ID")
+HEALTH_PORT = _int_env("PORT", "DISCORD_HEALTH_PORT") or 8787

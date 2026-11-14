@@ -30,3 +30,14 @@ accepted, so the root `.env` works unchanged.
   restyles every embed in one place.
 - `bot/content.py` — wording for `/rules` and `/info`.
 - `bot/cogs/` — one file per command group. New files load automatically.
+
+## Deployment
+
+Railway builds the root `Dockerfile` and runs `python -m bot.main`, so the
+Node app and the bot no longer share a runtime. The bot serves `/health`
+(200 when connected, 503 while starting) on `PORT`, falling back to
+`DISCORD_HEALTH_PORT` and then `8787`.
+
+Set `DISCORD_BOT_TOKEN` and `DISCORD_APPLICATION_ID` in the Railway service.
+`DISCORD_GUILD_ID` is optional and registers commands to that server instantly.
+

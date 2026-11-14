@@ -1,7 +1,11 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
   "deploy": {
-    "startCommand": "node scripts/discord-bot.mjs",
+    "startCommand": "python -m bot.main",
     "restartPolicyType": "ON_FAILURE"
   }
 }

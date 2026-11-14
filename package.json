@@ -6,20 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "bot": "node --env-file-if-exists=.env scripts/discord-bot.mjs",
     "lint": "eslint ."
   },
   "dependencies": {
     "@chat-adapter/discord": "latest",
     "@chat-adapter/state-memory": "^4.44.0",
     "chat": "latest",
-    "discord.js": "^14.28.1",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"
-  },
-  "optionalDependencies": {
-    "zlib-sync": "^0.1.10"
   },
   "overrides": {
     "@typescript-eslint/typescript-estree": {
