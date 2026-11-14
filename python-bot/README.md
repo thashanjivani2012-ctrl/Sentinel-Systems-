@@ -28,6 +28,7 @@ accepted, so the root `.env` works unchanged.
 - `bot/embeds.py` — the embed builder and global theme.
   `configure_theme(color=..., footer=..., thumbnail_url=..., timestamp=False)`
   restyles every embed in one place.
+- `bot/cards.py` — the `/status` Components V2 card.
 - `bot/content.py` — wording for `/rules` and `/info`.
 - `bot/cogs/` — one file per command group. New files load automatically.
 

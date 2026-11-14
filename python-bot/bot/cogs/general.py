@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot import content, helpers
+from bot.cards import status_card
 from bot.embeds import build_embed, content_embed, field
 
 
@@ -31,29 +32,8 @@ class General(commands.Cog):
 
     @app_commands.command(name="status", description="Show detailed system status")
     async def status(self, interaction: discord.Interaction):
-        status = helpers.status_snapshot(self.bot)
-        online = status["online"]
-        heading = (
-            "Online — gateway connected and responding"
-            if online
-            else "Connecting — gateway is reconnecting"
-        )
         await interaction.response.send_message(
-            embed=build_embed(
-                color="success" if online else "warning",
-                title="Sentinel Systems",
-                description=f"**● {'Online' if online else 'Connecting'}** — {heading}",
-                thumbnail_url=self.avatar_url,
-                fields=[
-                    field("Uptime", helpers.format_duration(status["uptime"])),
-                    field("Gateway latency", helpers.format_latency(status["gateway_latency"])),
-                    field("Response time", f"{helpers.response_time_ms(interaction)} ms"),
-                    field("Guilds", str(status["guilds"])),
-                    field("Commands", str(status["commands"])),
-                    field("Memory", status["memory"]),
-                    field("Python", status["python"]),
-                ],
-            )
+            view=status_card(self.bot, helpers.response_time_ms(interaction))
         )
 
     @app_commands.command(name="help", description="Show available commands")
