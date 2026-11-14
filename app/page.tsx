@@ -3,7 +3,11 @@ import { CopyButton } from "@/components/copy-button"
 const commands = [
   { command: "/ping", description: "Check bot health and latency." },
   { command: "/status", description: "Detailed status with uptime, latency, and memory." },
-  { command: "help", description: "List commands inside a subscribed thread." },
+  { command: "/info", description: "Bot information, live stats, and where to start." },
+  { command: "/rules", description: "Server rules rendered from a single content file." },
+  { command: "/userinfo", description: "Profile details and account age for any member." },
+  { command: "/avatar", description: "Full-size avatar for any member." },
+  { command: "/help", description: "Every command, listed from one source of truth." },
 ]
 
 export default function Home() {

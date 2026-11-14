@@ -2,7 +2,6 @@ import { createServer } from "node:http"
 import {
   Client,
   ContainerBuilder,
-  EmbedBuilder,
   Events,
   GatewayIntentBits,
   MessageFlags,
@@ -15,6 +14,9 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "discord.js"
+
+import { info, rules } from "./content.mjs"
+import { COLORS, buildEmbed, contentEmbed, field } from "./embeds.mjs"
 
 const token = process.env.DISCORD_BOT_TOKEN
   ?.trim()
@@ -29,6 +31,8 @@ const commands = [
   new SlashCommandBuilder().setName("ping").setDescription("Check whether Sentinel is online"),
   new SlashCommandBuilder().setName("status").setDescription("Show detailed system status"),
   new SlashCommandBuilder().setName("help").setDescription("Show available commands"),
+  new SlashCommandBuilder().setName("rules").setDescription("Show the server rules"),
+  new SlashCommandBuilder().setName("info").setDescription("Show information about Sentinel"),
   new SlashCommandBuilder().setName("uptime").setDescription("Show how long the bot has been running"),
   new SlashCommandBuilder().setName("serverinfo").setDescription("Show info about this server").setDMPermission(false),
   new SlashCommandBuilder()
@@ -49,6 +53,15 @@ const commands = [
     .setDescription("Ask the magic 8-ball")
     .addStringOption((o) => o.setName("question").setDescription("Your question").setRequired(true).setMaxLength(200)),
 ]
+
+// Discord rejects a payload with two commands of the same name, so register each name once.
+function dedupeCommands(list) {
+  const byName = new Map()
+  for (const command of list) byName.set(command.name, command)
+  return [...byName.values()]
+}
+
+const commandList = dedupeCommands(commands)
 
 const eightBall = [
   "It is certain.", "Without a doubt.", "Yes, definitely.", "Most likely.", "Signs point to yes.",
@@ -83,6 +96,7 @@ function getStatusSnapshot() {
     uptime,
     gatewayLatency: client.ws.ping,
     guilds: client.guilds.cache.size,
+    commands: commandList.length,
     memory: `${heapUsed.toFixed(1)} MB`,
     node: process.version,
   }
@@ -90,7 +104,7 @@ function getStatusSnapshot() {
 
 function buildStatusContainer(responseTime) {
   const status = getStatusSnapshot()
-  const color = status.online ? 0x57f287 : 0xfee75c
+  const color = status.online ? COLORS.success : COLORS.warning
   const heading = status.online ? "Online — gateway connected and responding" : "Connecting — gateway is reconnecting"
 
   const container = new ContainerBuilder().setAccentColor(color)
@@ -121,7 +135,7 @@ function buildStatusContainer(responseTime) {
     new TextDisplayBuilder().setContent(
       [
         `**Guilds** — ${status.guilds}`,
-        `**Commands** — ${commands.length}`,
+        `**Commands** — ${status.commands}`,
         `**Memory** — ${status.memory}`,
         `**Node.js** — ${status.node}`,
       ].join("\n"),
@@ -145,17 +159,21 @@ client.once(Events.ClientReady, async (readyClient) => {
     if (!applicationId) throw new Error("Missing DISCORD_APPLICATION_ID")
 
     const rest = new REST({ version: "10" }).setToken(token)
-    const body = commands.map((c) => c.toJSON())
+    const body = commandList.map((command) => command.toJSON())
     const globalRoute = Routes.applicationCommands(applicationId)
 
     if (guildId) {
       await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body })
       // Wipe stale global registrations so commands don't appear twice.
       await rest.put(globalRoute, { body: [] })
-      console.log(`[discord] Registered commands in guild ${guildId}; cleared global commands`)
+      console.log(`[discord] Registered ${body.length} commands in guild ${guildId}; cleared global commands`)
     } else {
       await rest.put(globalRoute, { body })
-      console.log("[discord] Registered commands globally")
+      // Wipe guild-scoped copies left behind by an earlier DISCORD_GUILD_ID run.
+      for (const guild of readyClient.guilds.cache.values()) {
+        await rest.put(Routes.applicationGuildCommands(applicationId, guild.id), { body: [] })
+      }
+      console.log(`[discord] Registered ${body.length} commands globally; cleared guild-scoped copies`)
     }
   } catch (error) {
     console.error("[discord] Command registration failed; keeping the bot online.", error)
@@ -167,16 +185,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
     if (interaction.commandName === "ping") {
-      const embed = new EmbedBuilder()
-        .setColor(0x57f287)
-        .setTitle("Pong!")
-        .setDescription("Sentinel is online and ready.")
-        .addFields(
-          { name: "Gateway latency", value: formatLatency(client.ws.ping), inline: true },
-          { name: "Response time", value: `${Date.now() - interaction.createdTimestamp} ms`, inline: true },
-        )
-        .setTimestamp()
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            color: "success",
+            title: "Pong!",
+            description: "Sentinel is online and ready.",
+            fields: [
+              field("Gateway latency", formatLatency(client.ws.ping)),
+              field("Response time", `${Date.now() - interaction.createdTimestamp} ms`),
+            ],
+          }),
+        ],
+      })
       return
     }
 
@@ -189,83 +210,152 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.commandName === "help") {
-      const embed = new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle("Sentinel commands")
-        .setDescription(commands.map((c) => `\`/${c.name}\` — ${c.description}`).join("\n"))
-      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            color: "info",
+            title: "Sentinel commands",
+            description: commandList.map((command) => `\`/${command.name}\` — ${command.description}`).join("\n"),
+          }),
+        ],
+        flags: MessageFlags.Ephemeral,
+      })
       return
     }
 
-    const embed = new EmbedBuilder().setColor(0x5865f2)
+    if (interaction.commandName === "rules") {
+      await interaction.reply({
+        embeds: [contentEmbed(rules, { thumbnailURL: client.user.displayAvatarURL() })],
+      })
+      return
+    }
+
+    if (interaction.commandName === "info") {
+      const status = getStatusSnapshot()
+      await interaction.reply({
+        embeds: [
+          contentEmbed(info, {
+            color: "info",
+            thumbnailURL: client.user.displayAvatarURL(),
+            fields: [
+              ...info.fields,
+              field("Commands", String(status.commands)),
+              field("Guilds", String(status.guilds)),
+              field("Uptime", formatDuration(status.uptime)),
+              field("Latency", formatLatency(status.gatewayLatency)),
+            ],
+          }),
+        ],
+      })
+      return
+    }
 
     if (interaction.commandName === "uptime") {
-      embed.setTitle("Uptime").setDescription(formatDuration(client.uptime ?? 0))
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: "Uptime",
+            description: `Sentinel has been online for **${formatDuration(client.uptime ?? 0)}**.`,
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "serverinfo") {
       const guild = interaction.guild
       if (!guild) {
-        await interaction.reply({ embeds: [embed.setDescription("This command only works in a server.")], flags: MessageFlags.Ephemeral })
+        await interaction.reply({
+          embeds: [buildEmbed({ color: "warning", description: "This command only works in a server." })],
+          flags: MessageFlags.Ephemeral,
+        })
         return
       }
-      embed
-        .setTitle(guild.name)
-        .setThumbnail(guild.iconURL())
-        .addFields(
-          { name: "Members", value: String(guild.memberCount), inline: true },
-          { name: "Created", value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true },
-          { name: "Owner", value: `<@${guild.ownerId}>`, inline: true },
-        )
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: guild.name,
+            thumbnailURL: guild.iconURL(),
+            fields: [
+              field("Members", String(guild.memberCount)),
+              field("Created", `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`),
+              field("Owner", `<@${guild.ownerId}>`),
+            ],
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "userinfo") {
       const user = interaction.options.getUser("user") ?? interaction.user
-      embed
-        .setTitle(user.tag)
-        .setThumbnail(user.displayAvatarURL())
-        .addFields(
-          { name: "ID", value: user.id, inline: true },
-          { name: "Account created", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`, inline: true },
-          { name: "Bot", value: user.bot ? "Yes" : "No", inline: true },
-        )
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: user.tag,
+            thumbnailURL: user.displayAvatarURL(),
+            fields: [
+              field("ID", user.id),
+              field("Account created", `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`),
+              field("Bot", user.bot ? "Yes" : "No"),
+            ],
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "avatar") {
       const user = interaction.options.getUser("user") ?? interaction.user
-      embed.setTitle(`${user.username}'s avatar`).setImage(user.displayAvatarURL({ size: 1024 }))
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: `${user.username}'s avatar`,
+            imageURL: user.displayAvatarURL({ size: 1024 }),
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "roll") {
       const sides = interaction.options.getInteger("sides") ?? 6
-      embed.setTitle("Dice roll").setDescription(`You rolled a **${1 + Math.floor(Math.random() * sides)}** (d${sides})`)
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: "Dice roll",
+            description: `You rolled a **${1 + Math.floor(Math.random() * sides)}** (d${sides})`,
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "coinflip") {
-      embed.setTitle("Coin flip").setDescription(`**${Math.random() < 0.5 ? "Heads" : "Tails"}**`)
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: "Coin flip",
+            description: `**${Math.random() < 0.5 ? "Heads" : "Tails"}**`,
+          }),
+        ],
+      })
       return
     }
 
     if (interaction.commandName === "8ball") {
       const question = interaction.options.getString("question", true)
-      embed
-        .setTitle("Magic 8-ball")
-        .addFields(
-          { name: "Question", value: question },
-          { name: "Answer", value: eightBall[Math.floor(Math.random() * eightBall.length)] },
-        )
-      await interaction.reply({ embeds: [embed] })
+      await interaction.reply({
+        embeds: [
+          buildEmbed({
+            title: "Magic 8-ball",
+            fields: [
+              field("Question", question, false),
+              field("Answer", eightBall[Math.floor(Math.random() * eightBall.length)], false),
+            ],
+          }),
+        ],
+      })
       return
     }
   } catch (error) {
